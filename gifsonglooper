@@ -1,0 +1,92 @@
+print_help(){
+    echo -e "\nUsage: gifsonglooper [SPOTIFY_URL] [GIF_SRC] [BPM] [OUTPUT_FILE_NAME]"
+    echo
+}
+
+download_spotify_song(){
+    spotifySongURL=$1
+    # source ~/venv2/bin/activate && echo "Activated python virtual environment"
+    spotdl "$spotifySongURL"
+}
+
+timestamp_to_seconds(){
+    durationString=$1
+    hours=$(echo "$durationString" 2>&1 | cut -d ":" -f 1)
+    minutes=$(echo "$durationString" 2>&1 | cut -d ":" -f 2)
+    seconds=$(echo "$durationString" 2>&1 | cut -d ":" -f 3 | cut -d '.' -f 1)
+    # echo "hours: $hours"
+    # echo "minutes: $minutes"
+    # echo "seconds: $seconds"
+    clipDurationSeconds=$((($hours * 3600) + ($minutes * 60) + $seconds))
+    echo "$clipDurationSeconds"
+}
+
+
+spotifyURL=$1
+gifSrc=$2
+bpm=$3
+outputFileName=$4
+
+if [ -z "$spotifyURL" ]; then
+    echo "No spotify URL specified. Exiting."
+    print_help
+    exit 1
+fi
+
+if [ -z "$gifSrc" ]; then
+    echo "No gif source specified. Exiting."
+    print_help
+    exit 1
+fi
+
+if [ -z "$bpm" ]; then
+    echo "No bpm specified. Exiting."
+    print_help
+    exit 1
+fi
+
+if [ -z "$outputFileName" ]; then
+    echo "No output filename specified. Exiting."
+    print_help
+    exit 1
+fi
+
+
+
+tempDir="gifsonglooper"
+echo "tempDir: $tempDir"
+
+
+rm -rf $tempDir
+mkdir -p $tempDir
+cd $tempDir
+
+download_spotify_song $spotifyURL
+songPath=$(ls)
+
+IFS='\n'
+songDuration=$(ffprobe "$songPath" 2>&1 | grep Duration: | cut -d ',' -f1 | cut -d ':' -f2- | xargs)
+echo "songDuration: $songDuration"
+gifDuration=$(ffprobe "$gifSrc" 2>&1 | grep Duration: | cut -d ',' -f1 | cut -d ':' -f2- | xargs)
+echo "gifDuration: $gifDuration"
+
+gifSeconds=$(timestamp_to_seconds $gifDuration 2>&1)
+echo "gifSeconds: $gifSeconds"
+
+bps=$(bc <<< "scale=1; $bpm/60")
+echo "bps: $bps"
+
+gifScale=$(bc <<< "scale=2; $gifSeconds/($bps*4)")
+echo "gifScale: $gifScale"
+
+ffmpeg -itsscale $gifScale -i "$gifSrc" scaledgif.gif
+ffmpeg -stream_loop -1 -i scaledgif.gif -t "$songDuration" scaledvid1.mp4
+ffmpeg -i scaledvid1.mp4 -i "$songPath" -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 loopedvid.mp4
+
+cp loopedvid.mp4 "../$outputFileName.mp4"
+rm -rf $tempDir
+
+echo "Done"
+
+
+
