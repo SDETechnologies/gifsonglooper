@@ -14,10 +14,13 @@ timestamp_to_seconds(){
     hours=$(echo "$durationString" 2>&1 | cut -d ":" -f 1)
     minutes=$(echo "$durationString" 2>&1 | cut -d ":" -f 2)
     seconds=$(echo "$durationString" 2>&1 | cut -d ":" -f 3 | cut -d '.' -f 1)
+    centiseconds=$(echo "$durationString" 2>&1 | cut -d ":" -f 3 | cut -d '.' -f 2)
+
     # echo "hours: $hours"
     # echo "minutes: $minutes"
     # echo "seconds: $seconds"
     clipDurationSeconds=$((($hours * 3600) + ($minutes * 60) + $seconds))
+    clipDurationSeconds=$(bc <<< "scale=1; $clipDurationSeconds + ($centiseconds/100)")
     echo "$clipDurationSeconds"
 }
 
@@ -61,8 +64,11 @@ rm -rf $tempDir
 mkdir -p $tempDir
 cd $tempDir
 
+python -m venv venv
+source venv/bin/activate
+
 download_spotify_song $spotifyURL
-songPath=$(ls)
+songPath=$(ls | grep ".mp3")
 
 IFS='\n'
 songDuration=$(ffprobe "$songPath" 2>&1 | grep Duration: | cut -d ',' -f1 | cut -d ':' -f2- | xargs)
@@ -76,7 +82,20 @@ echo "gifSeconds: $gifSeconds"
 bps=$(bc <<< "scale=1; $bpm/60")
 echo "bps: $bps"
 
-gifScale=$(bc <<< "scale=2; $gifSeconds/($bps*4)")
+barSeconds=$(bc <<< "scale=1; $bps*4")
+echo "barSeconds: $barSeconds"
+
+
+if  [ $(($bpm/60*4)) -gt $(echo "$barSeconds" | cut -d '.' -f1) ]; then
+    gifScale=$(bc <<< "scale=2; $gifSeconds/$barSeconds")
+else
+    gifScale=$(bc <<< "scale=2; $barSeconds/$gifSeconds")
+fi
+
+while [ $(echo "$gifScale" | cut -d '.' -f1) -gt 2 ] || [ $(echo "$gifScale" | cut -d '.' -f1) -eq 2 ]; do 
+    gifScale=$(bc <<< "scale=2; $gifScale/2")
+done;
+
 echo "gifScale: $gifScale"
 
 ffmpeg -itsscale $gifScale -i "$gifSrc" scaledgif.gif
