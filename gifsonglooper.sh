@@ -1,5 +1,5 @@
 print_help(){
-    echo -e "\nUsage: gifsonglooper [SPOTIFY_URL] [GIF_SRC] [BPM] [OUTPUT_FILE_NAME]"
+    echo -e "\nUsage: gifsonglooper [SPOTIFY_URL] [INPUT_VIDEO_SRC] [BPM] [OUTPUT_FILE_NAME]"
     echo
 }
 
@@ -20,7 +20,7 @@ timestamp_to_seconds(){
     # echo "minutes: $minutes"
     # echo "seconds: $seconds"
     clipDurationSeconds=$((($hours * 3600) + ($minutes * 60) + $seconds))
-    clipDurationSeconds=$(bc <<< "scale=1; $clipDurationSeconds + ($centiseconds/100)")
+    clipDurationSeconds=$(bc <<< "scale=1; $clipDurationSeconds+($centiseconds/100)")
     echo "$clipDurationSeconds"
 }
 
@@ -53,7 +53,6 @@ if [ -z "$outputFileName" ]; then
     print_help
     exit 1
 fi
-
 
 
 tempDir="gifsonglooper"
@@ -98,14 +97,15 @@ done;
 
 echo "gifScale: $gifScale"
 
-ffmpeg -itsscale $gifScale -i "$gifSrc" scaledgif.gif
-ffmpeg -stream_loop -1 -i scaledgif.gif -t "$songDuration" scaledvid1.mp4
+inputFileName=$(echo "$gifSrc" | cut -d '.' -f1)
+inputFileExtension=$(echo "$gifSrc" | cut -d '.' -f2)
+
+
+ffmpeg -itsscale $gifScale -i "$gifSrc" "scaledgif.$inputFileExtension"
+ffmpeg -stream_loop -1 -i "scaledgif.$inputFileExtension" -t "$songDuration" scaledvid1.mp4
 ffmpeg -i scaledvid1.mp4 -i "$songPath" -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 loopedvid.mp4
 
 cp loopedvid.mp4 "../$outputFileName.mp4"
 rm -rf $tempDir
 
 echo "Done"
-
-
-
